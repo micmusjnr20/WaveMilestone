@@ -1,0 +1,15 @@
+edition = "2021"
+newline_style = "Unix"
+indent_style = "Space"
+indent_width = 4
+max_width = 120
+fn_single_line = true
+struct_lit_single_line = false
+imports_granularity = "Crate"
+reorder_imports = true
+reorder_modules = true
+normalize_comments = true
+wrap_comments = true
+format_code_in_doc_comments = true
+format_strings = false
+use_small_heuristics = "Max"

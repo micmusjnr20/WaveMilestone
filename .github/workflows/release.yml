@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            contracts/wave_milestone
+
+      - name: Install Soroban CLI
+        uses: stellar/stellar-cli-action@v1
+        with:
+          version: "latest"
+
+      - name: Build contract WASM
+        run: |
+          cargo build --release --target wasm32-unknown-unknown --package wave-milestone
+          wasm-opt \
+            -Os \
+            --strip-debug \
+            --enable-bulk-memory \
+            target/wasm32-unknown-unknown/release/wave_milestone.wasm \
+            -o wave_milestone_optimized.wasm
+
+      - name: Compute WASM hash
+        run: sha256sum wave_milestone_optimized.wasm > wave_milestone_optimized.wasm.sha256
+
+      - name: Generate release artifacts
+        run: |
+          mkdir -p release-artifacts
+          cp wave_milestone_optimized.wasm release-artifacts/
+          cp wave_milestone_optimized.wasm.sha256 release-artifacts/
+          cp contracts/wave_milestone/Cargo.toml release-artifacts/
+          cp -r contracts/wave_milestone/src release-artifacts/src
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: WaveMilestone ${{ github.ref_name }}
+          body: |
+            ## WaveMilestone ${{ github.ref_name }}
+
+            ### Artifacts
+            - `wave_milestone_optimized.wasm` — Optimized contract WASM binary for Stellar Soroban deployment.
+            - `wave_milestone_optimized.wasm.sha256` — SHA-256 checksum.
+
+            ### Deployment
+            ```bash
+            soroban contract deploy \
+              --wasm wave_milestone_optimized.wasm \
+              --source <DEPLOYER_KEY> \
+              --network testnet
+            ```
+          files: |
+            release-artifacts/*
+          draft: false
+          prerelease: false

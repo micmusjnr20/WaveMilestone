@@ -1,0 +1,31 @@
+version: "3.9"
+
+services:
+  build:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: builder
+    image: wave-milestone-builder:latest
+    volumes:
+      - ../target:/app/target
+
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    image: wave-milestone-test:latest
+    volumes:
+      - ../target:/app/target
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+
+  wasm-opt:
+    image: ghcr.io/nicedoc/wasm-opt:latest
+    volumes:
+      - ../target:/target
+    entrypoint: >
+      wasm-opt -Os --strip-debug
+      /target/wasm32-unknown-unknown/release/wave_milestone.wasm
+      -o /target/wasm32-unknown-unknown/release/wave_milestone_optimized.wasm

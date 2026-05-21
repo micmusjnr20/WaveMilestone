@@ -1,0 +1,16 @@
+msrv = "1.81.0"
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+allowed-duplicate-crates = ["soroban-sdk"]
+doc-valid-idents = [
+    "Soroban",
+    "Stellar",
+    "SAC",
+    "WaveGuard",
+    "WaveMilestone",
+    "GitHub",
+    "PR",
+    "CI",
+    "CD",
+    "e2e",
+]

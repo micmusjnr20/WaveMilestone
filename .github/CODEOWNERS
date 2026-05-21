@@ -1,0 +1,28 @@
+# Each line is a file pattern followed by one or more owners.
+# Order matters: the last matching pattern takes precedence.
+
+# Default owners for the entire repository
+* @anomalyco
+
+# Smart contract core
+/contracts/wave_milestone/src/ @anomalyco
+
+# Tests
+/contracts/wave_milestone/tests/ @anomalyco
+
+# CI/CD configuration
+/.github/ @anomalyco
+
+# Documentation
+/docs/ @anomalyco
+
+# Docker configuration
+/docker/ @anomalyco
+
+# Build scripts
+/scripts/ @anomalyco
+
+# Root config
+/Cargo.toml @anomalyco
+/rust-toolchain.toml @anomalyco
+/clippy.toml @anomalyco

@@ -1,0 +1,31 @@
+[package]
+name = "wave-milestone"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Automated Milestone & Issue Escrow Release on Stellar Soroban"
+keywords = ["stellar", "soroban", "escrow", "milestone", "bounty"]
+categories = ["cryptography::cryptocurrencies", "finance", "wasm"]
+
+[lib]
+crate-type = ["cdylib", "lib"]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["dep"] }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils", "dep"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
+
+[profile.release]
+inherits = "workspace"
