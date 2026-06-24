@@ -8,7 +8,7 @@ fn test_unregistered_maintainer_cannot_create_pool() {
     let ctx = TestContext::new();
     let pool_size = DEFAULT_POOL_FUNDS;
 
-    ctx.token_client().mint(&ctx.stranger, pool_size);
+    ctx.token_client().mint(&ctx.stranger, &pool_size);
 
     let result = ctx.client().try_create_milestone_pool(
         &ctx.stranger,

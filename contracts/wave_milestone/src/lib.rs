@@ -2,13 +2,10 @@
 
 mod events;
 mod test;
-mod types;
+pub mod types;
 
-use events::{
-    BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent, TOPIC_BOUNTY_RELEASED,
-    TOPIC_FUNDS_CLAWED_BACK, TOPIC_POOL_CREATED,
-};
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol};
+use events::{BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
 use types::{DataKey, Error, IssueClaim, MilestonePool, TokenClient, WaveGuardClient};
 
 const ONE_MONTH_IN_SECONDS: u64 = 2_592_000;
@@ -66,7 +63,7 @@ impl WaveMilestoneContract {
         // ── Persist pool ──
         let pool = MilestonePool {
             guard_contract,
-            asset,
+            asset: asset.clone(),
             total_funds,
             allocated_funds: 0,
             expiry,

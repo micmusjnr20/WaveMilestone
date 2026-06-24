@@ -76,3 +76,32 @@ fn test_duplicate_claim_same_issue_different_repo_allowed() {
 
     assert!(result.is_ok());
 }
+
+#[test]
+fn test_claim_status_is_scoped_by_repo_hash() {
+    let ctx = TestContext::new();
+    ctx.fund_pool(DEFAULT_POOL_FUNDS * 2);
+    let issue_id = 1u32;
+
+    ctx.client().release_issue_bounty(
+        &ctx.maintainer,
+        &ctx.repo_hash,
+        &issue_id,
+        &ctx.developer,
+        &DEFAULT_BOUNTY,
+    );
+
+    assert!(ctx.client().is_claimed(&ctx.repo_hash, &issue_id));
+    assert!(!ctx.client().is_claimed(&ctx.repo_hash_two, &issue_id));
+
+    ctx.client().release_issue_bounty(
+        &ctx.maintainer,
+        &ctx.repo_hash_two,
+        &issue_id,
+        &ctx.developer_two,
+        &DEFAULT_BOUNTY,
+    );
+
+    assert!(ctx.client().is_claimed(&ctx.repo_hash, &issue_id));
+    assert!(ctx.client().is_claimed(&ctx.repo_hash_two, &issue_id));
+}

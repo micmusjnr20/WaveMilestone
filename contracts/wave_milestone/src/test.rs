@@ -2,14 +2,12 @@
 
 extern crate std;
 
-use crate::types::{
-    DataKey, Error, IssueClaim, MilestonePool, TokenClient, TokenInterface, WaveGuardClient,
-    WaveGuardInterface,
-};
-use crate::WaveMilestoneContract;
+use crate::types::Error;
+use crate::{WaveMilestoneContract, WaveMilestoneContractClient};
 use soroban_sdk::{
-    contract, contractimpl, contracttype, testutils::Address as _, token, Address, BytesN, Env,
-    IntoVal, Symbol,
+    contract, contractimpl, contracttype,
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -123,13 +121,13 @@ fn setup() -> TestEnv {
     let developer = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let guard_id = env.register_contract(&MockWaveGuard, ());
+    let guard_id = env.register(MockWaveGuard, ());
     MockWaveGuardClient::new(&env, &guard_id).add_maintainer(&maintainer);
 
-    let token_id = env.register_contract(&MockToken, ());
+    let token_id = env.register(MockToken, ());
     MockTokenClient::new(&env, &token_id).init(&maintainer);
 
-    let contract_id = env.register_contract(&WaveMilestoneContract, ());
+    let contract_id = env.register(WaveMilestoneContract, ());
 
     let repo_hash = BytesN::from_array(&env, &[0u8; 32]);
     let expiry = env.ledger().timestamp() + 2_592_000;
@@ -148,7 +146,7 @@ fn setup() -> TestEnv {
 }
 
 fn fund_pool(t: &TestEnv, amount: u128) {
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, amount);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, &amount);
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).create_milestone_pool(
         &t.maintainer,
         &t.guard_id,
@@ -167,7 +165,7 @@ fn test_create_milestone_pool_success() {
     let t = setup();
     let pool_size: u128 = 10_000_000_000;
 
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, pool_size);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, &pool_size);
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).create_milestone_pool(
         &t.maintainer,
         &t.guard_id,
@@ -404,7 +402,7 @@ fn test_non_maintainer_cannot_create_pool() {
     let t = setup();
     let pool_size: u128 = 10_000_000_000;
 
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.stranger, pool_size);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.stranger, &pool_size);
 
     let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_create_milestone_pool(
         &t.stranger,
