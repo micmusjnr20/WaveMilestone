@@ -104,6 +104,43 @@ WaveMilestone is a smart contract that holds real assets in escrow. The primary 
 - Even if an attacker front-runs the transaction, they would be sending funds to the same `developer` address (not to themselves).
 - The attacker gains nothing by front-running.
 
+## Trust Assumptions
+
+Understanding what the WaveMilestone contract trusts is critical for a correct security assessment.
+
+### WaveGuard Contract (`guard_contract`)
+
+The WaveGuard registry is the **sole on-chain authority** for maintainer identity. Every privileged write — pool creation and bounty release — defers to `is_maintainer()` on the contract address stored in `pool.guard_contract`.
+
+**Implications**:
+- The `guard_contract` address is fixed at `create_milestone_pool` time and **cannot be rotated** afterward. If the WaveGuard instance is compromised, upgraded maliciously, or its `is_maintainer` logic altered, an attacker can gain maintainer status and drain the pool.
+- Deployers must ensure WaveGuard is not upgradeable by any party that is not fully trusted, or that any upgrade mechanism requires multi-party approval.
+- WaveGuard is **not** consulted during `clawback_expired_funds`. That function performs a direct address equality check (`maintainer == pool.maintainer`) to deliberately isolate the clawback path from a potential WaveGuard compromise.
+
+### Maintainer Address (`maintainer` / `pool.maintainer`)
+
+The `release_issue_bounty` function accepts an arbitrary `developer` address supplied by the maintainer caller. There is **no on-chain restriction** preventing a maintainer from directing a bounty to an address they control.
+
+**Implications**:
+- A malicious or compromised maintainer key can redirect any bounty to any address.
+- This is an accepted design trade-off: the protocol is permissioned and maintainers are vetted by WaveGuard. Off-chain governance (key management, multi-sig, WaveGuard revocation) is the intended mitigation.
+- The expected behavior is documented and tested in `tests/claim_manipulation.rs` (`test_maintainer_can_redirect_developer_address`).
+
+**Mitigations available to deployers**:
+- Use a multi-sig wallet for the maintainer key on mainnet.
+- Enforce off-chain review/approval before calling `release_issue_bounty`.
+- Monitor emitted `BountyReleased` events for unexpected recipient addresses.
+
+### Token Contract (`pool.asset`)
+
+The contract calls an external SAC-style token during fund intake (`create_milestone_pool`), payout (`release_issue_bounty`), and clawback (`clawback_expired_funds`). The token at `pool.asset` is fully trusted to:
+- Execute transfers atomically.
+- Report accurate balances.
+- Not re-enter this contract during transfer calls.
+- Not silently absorb or lose funds.
+
+**Implication**: Deployment must use only verified [Stellar Asset Contracts (SAC)](https://developers.stellar.org/docs/tokens/stellar-asset-contract). A malicious or buggy token contract can bypass all other mitigations in this contract.
+
 ## Audit Checklist
 
 Items to verify during security review:
