@@ -4,11 +4,16 @@ mod events;
 mod test;
 pub mod types;
 
+#89-Add-CI-check-for-Soroban-contract-build-FIX
 use events::{
     BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent, TOPIC_BOUNTY_RELEASED, TOPIC_FUNDS_CLAWED_BACK,
     TOPIC_POOL_CREATED,
 };
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
+
+use events::{BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
+main
 use types::{DataKey, Error, IssueClaim, MilestonePool, TokenClient, WaveGuardClient};
 
 // ─────────────────────────────────────────────────────────────

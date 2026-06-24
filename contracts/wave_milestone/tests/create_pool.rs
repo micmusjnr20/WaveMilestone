@@ -9,7 +9,17 @@ fn test_create_milestone_pool_success() {
     let pool_size = DEFAULT_POOL_FUNDS;
 
     ctx.token_client().mint(&ctx.maintainer, &pool_size);
+#89-Add-CI-check-for-Soroban-contract-build-FIX
     ctx.client().create_milestone_pool(&ctx.maintainer, &ctx.guard_id, &ctx.token_id, &pool_size, &ctx.expiry);
+
+    ctx.client().create_milestone_pool(
+        &ctx.maintainer,
+        &ctx.guard_id,
+        &ctx.token_id,
+        &pool_size,
+        &ctx.expiry,
+    );
+ main
 
     let balance = ctx.client().milestone_balance();
     assert_eq!(balance, pool_size);

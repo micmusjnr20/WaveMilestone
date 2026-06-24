@@ -26,7 +26,29 @@ RUN wasm-opt \
     -o /wave_milestone_optimized.wasm
 
 # ─────────────────────────────────────────────────────────────
-# Stage 2: Minimal runtime image
+# Stage 2: Test runner with Soroban CLI
+# ─────────────────────────────────────────────────────────────
+FROM rust:1.81-slim-bookworm AS test-runner
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang \
+    libclang-dev \
+    binaryen \
+    pkg-config \
+    libssl-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN rustup target add wasm32-unknown-unknown
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    && cargo install --locked soroban-cli
+
+WORKDIR /app
+COPY . .
+
+# ─────────────────────────────────────────────────────────────
+# Stage 3: Minimal runtime image
 # ─────────────────────────────────────────────────────────────
 FROM scratch AS runtime
 

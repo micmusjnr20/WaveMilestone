@@ -13,13 +13,33 @@ services:
   test:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.test
+      dockerfile: docker/Dockerfile
+      target: test-runner
     image: wave-milestone-test:latest
     volumes:
       - ../target:/app/target
+      - ../contracts:/app/contracts
     environment:
       - RUST_LOG=info
       - RUST_BACKTRACE=1
+    command: cargo test --workspace -- --nocapture
+
+  dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: test-runner
+    image: wave-milestone-dev:latest
+    volumes:
+      - ..:/app
+      - cargo-cache:/usr/local/cargo/registry
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+    working_dir: /app
+    command: bash
+    tty: true
+    stdin_open: true
 
   wasm-opt:
     image: ghcr.io/nicedoc/wasm-opt:latest
@@ -29,3 +49,6 @@ services:
       wasm-opt -Os --strip-debug
       /target/wasm32-unknown-unknown/release/wave_milestone.wasm
       -o /target/wasm32-unknown-unknown/release/wave_milestone_optimized.wasm
+
+volumes:
+  cargo-cache:

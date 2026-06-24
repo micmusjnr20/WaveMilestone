@@ -18,10 +18,15 @@ pub struct MilestonePool {
 }
 
 impl MilestonePool {
+#89-Add-CI-check-for-Soroban-contract-build-FIX
     /// Returns the unallocated amount remaining in the pool.
     #[must_use]
     pub fn remaining_balance(&self) -> u128 {
         self.total_funds - self.allocated_funds
+
+    pub fn remaining_balance(&self) -> u128 {
+        self.total_funds.saturating_sub(self.allocated_funds)
+main
     }
 }
 
@@ -54,7 +59,11 @@ pub enum DataKey {
 // ─────────────────────────────────────────────────────────────
 
 #[contracterror]
+#89-Add-CI-check-for-Soroban-contract-build-FIX
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+main
 #[repr(u32)]
 pub enum Error {
     PoolNotFound = 1,
