@@ -33,13 +33,7 @@ fn test_exact_balance_allocation_succeeds() {
 
     ctx.fund_pool(pool_size);
 
-    ctx.client().release_issue_bounty(
-        &ctx.maintainer,
-        &ctx.repo_hash,
-        &1u32,
-        &ctx.developer,
-        &pool_size,
-    );
+    ctx.client().release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, &1u32, &ctx.developer, &pool_size);
 
     assert_eq!(ctx.client().milestone_balance(), 0);
     assert_eq!(ctx.token_client().balance(&ctx.developer), pool_size);
@@ -54,21 +48,9 @@ fn test_partial_claim_then_over_allocate_remaining() {
 
     ctx.fund_pool(pool_size);
 
-    ctx.client().release_issue_bounty(
-        &ctx.maintainer,
-        &ctx.repo_hash,
-        &1u32,
-        &ctx.developer,
-        &first,
-    );
+    ctx.client().release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, &1u32, &ctx.developer, &first);
 
-    let result = ctx.client().try_release_issue_bounty(
-        &ctx.maintainer,
-        &ctx.repo_hash,
-        &2u32,
-        &ctx.developer,
-        &second,
-    );
+    let result = ctx.client().try_release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, &2u32, &ctx.developer, &second);
 
     assert_eq!(result.err().unwrap(), Ok(Error::InsufficientPoolBalance));
 
@@ -82,13 +64,7 @@ fn test_zero_amount_does_not_drain_pool() {
     let ctx = TestContext::new();
     ctx.fund_pool(DEFAULT_POOL_FUNDS);
 
-    let result = ctx.client().try_release_issue_bounty(
-        &ctx.maintainer,
-        &ctx.repo_hash,
-        &1u32,
-        &ctx.developer,
-        &0u128,
-    );
+    let result = ctx.client().try_release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, &1u32, &ctx.developer, &0u128);
 
     assert_eq!(result.err().unwrap(), Ok(Error::InvalidAmount));
     assert_eq!(ctx.client().milestone_balance(), DEFAULT_POOL_FUNDS);

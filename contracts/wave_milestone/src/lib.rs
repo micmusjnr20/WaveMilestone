@@ -2,16 +2,14 @@
 
 mod events;
 mod test;
-mod types;
+pub mod types;
 
 use events::{
-    BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent, TOPIC_BOUNTY_RELEASED,
-    TOPIC_FUNDS_CLAWED_BACK, TOPIC_POOL_CREATED,
+    BountyReleasedEvent, FundsClawedBackEvent, PoolCreatedEvent, TOPIC_BOUNTY_RELEASED, TOPIC_FUNDS_CLAWED_BACK,
+    TOPIC_POOL_CREATED,
 };
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
 use types::{DataKey, Error, IssueClaim, MilestonePool, TokenClient, WaveGuardClient};
-
-const ONE_MONTH_IN_SECONDS: u64 = 2_592_000;
 
 // ─────────────────────────────────────────────────────────────
 // Contract Entry Point
@@ -66,7 +64,7 @@ impl WaveMilestoneContract {
         // ── Persist pool ──
         let pool = MilestonePool {
             guard_contract,
-            asset,
+            asset: asset.clone(),
             total_funds,
             allocated_funds: 0,
             expiry,
@@ -76,13 +74,8 @@ impl WaveMilestoneContract {
 
         // ── Emit event ──
         env.events().publish(
-            (symbol_short!("create"),),
-            PoolCreatedEvent {
-                maintainer,
-                asset,
-                total_funds,
-                expiry,
-            },
+            (Symbol::new(&env, TOPIC_POOL_CREATED),),
+            PoolCreatedEvent { maintainer, asset, total_funds, expiry },
         );
 
         Ok(())
@@ -112,11 +105,7 @@ impl WaveMilestoneContract {
         maintainer.require_auth();
 
         // ── Load pool ──
-        let mut pool = env
-            .storage()
-            .instance()
-            .get::<_, MilestonePool>(&DataKey::Pool)
-            .ok_or(Error::PoolNotFound)?;
+        let mut pool = env.storage().instance().get::<_, MilestonePool>(&DataKey::Pool).ok_or(Error::PoolNotFound)?;
 
         // ── WaveGuard validation ──
         let guard = WaveGuardClient::new(&env, &pool.guard_contract);
@@ -126,11 +115,7 @@ impl WaveMilestoneContract {
 
         // ── Duplicate-claim guard ──
         let claim_key = DataKey::IssueClaim(repo_hash.clone(), issue_id);
-        if let Some(claim) = env
-            .storage()
-            .temporary()
-            .get::<_, IssueClaim>(&claim_key)
-        {
+        if let Some(claim) = env.storage().temporary().get::<_, IssueClaim>(&claim_key) {
             if claim.completed {
                 return Err(Error::BountyAlreadyClaimed);
             }
@@ -147,38 +132,20 @@ impl WaveMilestoneContract {
 
         // ── Transfer tokens ──
         let token = TokenClient::new(&env, &pool.asset);
-        token.transfer(
-            &env.current_contract_address(),
-            &developer,
-            &amount,
-        );
+        token.transfer(&env.current_contract_address(), &developer, &amount);
 
         // ── Update pool state ──
         pool.allocated_funds += amount;
-        env.storage()
-            .instance()
-            .set(&DataKey::Pool, &pool);
+        env.storage().instance().set(&DataKey::Pool, &pool);
 
         // ── Record claim ──
-        let claim = IssueClaim {
-            issue_id,
-            developer: developer.clone(),
-            payment_amount: amount,
-            completed: true,
-        };
-        env.storage()
-            .temporary()
-            .set(&claim_key, &claim);
+        let claim = IssueClaim { issue_id, developer: developer.clone(), payment_amount: amount, completed: true };
+        env.storage().temporary().set(&claim_key, &claim);
 
         // ── Emit event ──
         env.events().publish(
-            (symbol_short!("release"),),
-            BountyReleasedEvent {
-                repo_hash,
-                issue_id,
-                developer,
-                amount,
-            },
+            (Symbol::new(&env, TOPIC_BOUNTY_RELEASED),),
+            BountyReleasedEvent { repo_hash, issue_id, developer, amount },
         );
 
         Ok(())
@@ -194,11 +161,7 @@ impl WaveMilestoneContract {
     pub fn clawback_expired_funds(env: Env, maintainer: Address) -> Result<(), Error> {
         maintainer.require_auth();
 
-        let mut pool = env
-            .storage()
-            .instance()
-            .get::<_, MilestonePool>(&DataKey::Pool)
-            .ok_or(Error::PoolNotFound)?;
+        let mut pool = env.storage().instance().get::<_, MilestonePool>(&DataKey::Pool).ok_or(Error::PoolNotFound)?;
 
         if maintainer != pool.maintainer {
             return Err(Error::UnauthorizedCaller);
@@ -215,23 +178,14 @@ impl WaveMilestoneContract {
         }
 
         let token = TokenClient::new(&env, &pool.asset);
-        token.transfer(
-            &env.current_contract_address(),
-            &maintainer,
-            &remaining,
-        );
+        token.transfer(&env.current_contract_address(), &maintainer, &remaining);
 
         pool.total_funds = pool.allocated_funds;
-        env.storage()
-            .instance()
-            .set(&DataKey::Pool, &pool);
+        env.storage().instance().set(&DataKey::Pool, &pool);
 
         env.events().publish(
-            (symbol_short!("clawback"),),
-            FundsClawedBackEvent {
-                maintainer,
-                amount: remaining,
-            },
+            (Symbol::new(&env, TOPIC_FUNDS_CLAWED_BACK),),
+            FundsClawedBackEvent { maintainer, amount: remaining },
         );
 
         Ok(())
@@ -241,27 +195,17 @@ impl WaveMilestoneContract {
 
     /// Returns the remaining spendable balance in the milestone pool.
     pub fn milestone_balance(env: Env) -> u128 {
-        env.storage()
-            .instance()
-            .get::<_, MilestonePool>(&DataKey::Pool)
-            .map(|p| p.remaining_balance())
-            .unwrap_or(0)
+        env.storage().instance().get::<_, MilestonePool>(&DataKey::Pool).map_or(0, |p| p.remaining_balance())
     }
 
     /// Returns `true` if a specific issue has already been claimed.
     pub fn is_claimed(env: Env, repo_hash: BytesN<32>, issue_id: u32) -> bool {
         let claim_key = DataKey::IssueClaim(repo_hash, issue_id);
-        env.storage()
-            .temporary()
-            .get::<_, IssueClaim>(&claim_key)
-            .map(|c| c.completed)
-            .unwrap_or(false)
+        env.storage().temporary().get::<_, IssueClaim>(&claim_key).is_some_and(|c| c.completed)
     }
 
     /// Returns the full milestone metadata, or `None` if uninitialized.
     pub fn milestone_info(env: Env) -> Option<MilestonePool> {
-        env.storage()
-            .instance()
-            .get::<_, MilestonePool>(&DataKey::Pool)
+        env.storage().instance().get::<_, MilestonePool>(&DataKey::Pool)
     }
 }

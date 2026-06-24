@@ -2,14 +2,12 @@
 
 extern crate std;
 
-use crate::types::{
-    DataKey, Error, IssueClaim, MilestonePool, TokenClient, TokenInterface, WaveGuardClient,
-    WaveGuardInterface,
-};
-use crate::WaveMilestoneContract;
+use crate::types::Error;
+use crate::{WaveMilestoneContract, WaveMilestoneContractClient};
 use soroban_sdk::{
-    contract, contractimpl, contracttype, testutils::Address as _, token, Address, BytesN, Env,
-    IntoVal, Symbol,
+    contract, contractimpl, contracttype,
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env,
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -28,16 +26,11 @@ struct MockWaveGuard;
 #[contractimpl]
 impl MockWaveGuard {
     pub fn is_maintainer(env: Env, address: Address) -> bool {
-        env.storage()
-            .instance()
-            .get::<_, bool>(&MockGuardKey::Maintainer(address))
-            .unwrap_or(false)
+        env.storage().instance().get::<_, bool>(&MockGuardKey::Maintainer(address)).unwrap_or(false)
     }
 
     pub fn add_maintainer(env: Env, address: Address) {
-        env.storage()
-            .instance()
-            .set(&MockGuardKey::Maintainer(address), &true);
+        env.storage().instance().set(&MockGuardKey::Maintainer(address), &true);
     }
 }
 
@@ -58,44 +51,21 @@ impl MockToken {
     }
 
     pub fn mint(env: Env, to: Address, amount: u128) {
-        let bal = env
-            .storage()
-            .instance()
-            .get::<_, u128>(&MockTokenKey::Balance(to.clone()))
-            .unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&MockTokenKey::Balance(to), &(bal + amount));
+        let bal = env.storage().instance().get::<_, u128>(&MockTokenKey::Balance(to.clone())).unwrap_or(0);
+        env.storage().instance().set(&MockTokenKey::Balance(to), &(bal + amount));
     }
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: u128) {
         from.require_auth();
-        let from_bal = env
-            .storage()
-            .instance()
-            .get::<_, u128>(&MockTokenKey::Balance(from.clone()))
-            .unwrap_or(0);
-        if from_bal < amount {
-            panic!("insufficient balance");
-        }
-        let to_bal = env
-            .storage()
-            .instance()
-            .get::<_, u128>(&MockTokenKey::Balance(to.clone()))
-            .unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&MockTokenKey::Balance(from), &(from_bal - amount));
-        env.storage()
-            .instance()
-            .set(&MockTokenKey::Balance(to), &(to_bal + amount));
+        let from_bal = env.storage().instance().get::<_, u128>(&MockTokenKey::Balance(from.clone())).unwrap_or(0);
+        assert!(from_bal >= amount, "insufficient balance");
+        let to_bal = env.storage().instance().get::<_, u128>(&MockTokenKey::Balance(to.clone())).unwrap_or(0);
+        env.storage().instance().set(&MockTokenKey::Balance(from), &(from_bal - amount));
+        env.storage().instance().set(&MockTokenKey::Balance(to), &(to_bal + amount));
     }
 
     pub fn balance(env: Env, id: Address) -> u128 {
-        env.storage()
-            .instance()
-            .get::<_, u128>(&MockTokenKey::Balance(id))
-            .unwrap_or(0)
+        env.storage().instance().get::<_, u128>(&MockTokenKey::Balance(id)).unwrap_or(0)
     }
 }
 
@@ -123,32 +93,22 @@ fn setup() -> TestEnv {
     let developer = Address::generate(&env);
     let stranger = Address::generate(&env);
 
-    let guard_id = env.register_contract(&MockWaveGuard, ());
+    let guard_id = env.register(MockWaveGuard, ());
     MockWaveGuardClient::new(&env, &guard_id).add_maintainer(&maintainer);
 
-    let token_id = env.register_contract(&MockToken, ());
+    let token_id = env.register(MockToken, ());
     MockTokenClient::new(&env, &token_id).init(&maintainer);
 
-    let contract_id = env.register_contract(&WaveMilestoneContract, ());
+    let contract_id = env.register(WaveMilestoneContract, ());
 
     let repo_hash = BytesN::from_array(&env, &[0u8; 32]);
     let expiry = env.ledger().timestamp() + 2_592_000;
 
-    TestEnv {
-        env,
-        maintainer,
-        developer,
-        stranger,
-        contract_id,
-        guard_id,
-        token_id,
-        repo_hash,
-        expiry,
-    }
+    TestEnv { env, maintainer, developer, stranger, contract_id, guard_id, token_id, repo_hash, expiry }
 }
 
 fn fund_pool(t: &TestEnv, amount: u128) {
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, amount);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, &amount);
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).create_milestone_pool(
         &t.maintainer,
         &t.guard_id,
@@ -167,7 +127,7 @@ fn test_create_milestone_pool_success() {
     let t = setup();
     let pool_size: u128 = 10_000_000_000;
 
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, pool_size);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.maintainer, &pool_size);
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).create_milestone_pool(
         &t.maintainer,
         &t.guard_id,
@@ -228,8 +188,7 @@ fn test_release_bounty_success() {
 
     fund_pool(&t, pool_size);
 
-    let developer_balance_before =
-        MockTokenClient::new(&t.env, &t.token_id).balance(&t.developer);
+    let developer_balance_before = MockTokenClient::new(&t.env, &t.token_id).balance(&t.developer);
 
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).release_issue_bounty(
         &t.maintainer,
@@ -239,16 +198,13 @@ fn test_release_bounty_success() {
         &bounty,
     );
 
-    let developer_balance_after =
-        MockTokenClient::new(&t.env, &t.token_id).balance(&t.developer);
+    let developer_balance_after = MockTokenClient::new(&t.env, &t.token_id).balance(&t.developer);
     assert_eq!(developer_balance_after - developer_balance_before, bounty);
 
     let remaining = WaveMilestoneContractClient::new(&t.env, &t.contract_id).milestone_balance();
     assert_eq!(remaining, pool_size - bounty);
 
-    assert!(
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&t.repo_hash, &1u32)
-    );
+    assert!(WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&t.repo_hash, &1u32));
 }
 
 #[test]
@@ -267,14 +223,13 @@ fn test_duplicate_claim_rejected() {
         &bounty,
     );
 
-    let result =
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
-            &t.maintainer,
-            &t.repo_hash,
-            &1u32,
-            &t.developer,
-            &bounty,
-        );
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
+        &t.maintainer,
+        &t.repo_hash,
+        &1u32,
+        &t.developer,
+        &bounty,
+    );
 
     assert_eq!(result.err().unwrap(), Ok(Error::BountyAlreadyClaimed));
 }
@@ -287,14 +242,13 @@ fn test_insufficient_pool_balance_graceful_revert() {
 
     fund_pool(&t, pool_size);
 
-    let result =
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
-            &t.maintainer,
-            &t.repo_hash,
-            &1u32,
-            &t.developer,
-            &bounty,
-        );
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
+        &t.maintainer,
+        &t.repo_hash,
+        &1u32,
+        &t.developer,
+        &bounty,
+    );
 
     assert_eq!(result.err().unwrap(), Ok(Error::InsufficientPoolBalance));
 
@@ -322,14 +276,13 @@ fn test_over_allocation_after_partial_claims() {
     );
 
     // Second claim exceeds remaining 2B
-    let result =
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
-            &t.maintainer,
-            &t.repo_hash,
-            &2u32,
-            &t.developer,
-            &second_bounty,
-        );
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
+        &t.maintainer,
+        &t.repo_hash,
+        &2u32,
+        &t.developer,
+        &second_bounty,
+    );
 
     assert_eq!(result.err().unwrap(), Ok(Error::InsufficientPoolBalance));
 }
@@ -354,18 +307,13 @@ fn test_clawback_expired_funds() {
     // Jump past expiry
     t.env.ledger().set_timestamp(t.expiry + 1);
 
-    let maintainer_balance_before =
-        MockTokenClient::new(&t.env, &t.token_id).balance(&t.maintainer);
+    let maintainer_balance_before = MockTokenClient::new(&t.env, &t.token_id).balance(&t.maintainer);
 
     WaveMilestoneContractClient::new(&t.env, &t.contract_id).clawback_expired_funds(&t.maintainer);
 
-    let maintainer_balance_after =
-        MockTokenClient::new(&t.env, &t.token_id).balance(&t.maintainer);
+    let maintainer_balance_after = MockTokenClient::new(&t.env, &t.token_id).balance(&t.maintainer);
     let expected_clawback = pool_size - bounty;
-    assert_eq!(
-        maintainer_balance_after - maintainer_balance_before,
-        expected_clawback
-    );
+    assert_eq!(maintainer_balance_after - maintainer_balance_before, expected_clawback);
 
     // Pool should show no remaining spendable balance
     let remaining = WaveMilestoneContractClient::new(&t.env, &t.contract_id).milestone_balance();
@@ -379,8 +327,7 @@ fn test_clawback_before_expiry_rejected() {
 
     fund_pool(&t, pool_size);
 
-    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id)
-        .try_clawback_expired_funds(&t.maintainer);
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_clawback_expired_funds(&t.maintainer);
 
     assert_eq!(result.err().unwrap(), Ok(Error::PoolNotExpired));
 }
@@ -392,9 +339,7 @@ fn test_unauthorized_caller_rejected() {
 
     fund_pool(&t, pool_size);
 
-    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_clawback_expired_funds(
-        &t.stranger,
-    );
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_clawback_expired_funds(&t.stranger);
 
     assert_eq!(result.err().unwrap(), Ok(Error::UnauthorizedCaller));
 }
@@ -404,7 +349,7 @@ fn test_non_maintainer_cannot_create_pool() {
     let t = setup();
     let pool_size: u128 = 10_000_000_000;
 
-    MockTokenClient::new(&t.env, &t.token_id).mint(&t.stranger, pool_size);
+    MockTokenClient::new(&t.env, &t.token_id).mint(&t.stranger, &pool_size);
 
     let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_create_milestone_pool(
         &t.stranger,
@@ -444,12 +389,8 @@ fn test_multiple_issues_different_repos_independent() {
     );
 
     // Each should be independently tracked
-    assert!(
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&t.repo_hash, &1u32)
-    );
-    assert!(
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&repo_b, &1u32)
-    );
+    assert!(WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&t.repo_hash, &1u32));
+    assert!(WaveMilestoneContractClient::new(&t.env, &t.contract_id).is_claimed(&repo_b, &1u32));
 }
 
 #[test]
@@ -467,14 +408,13 @@ fn test_pool_not_found_returns_none() {
 fn test_release_issue_bounty_pool_not_found() {
     let t = setup();
 
-    let result =
-        WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
-            &t.maintainer,
-            &t.repo_hash,
-            &1u32,
-            &t.developer,
-            &1_000_000_000,
-        );
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
+        &t.maintainer,
+        &t.repo_hash,
+        &1u32,
+        &t.developer,
+        &1_000_000_000,
+    );
 
     assert_eq!(result.err().unwrap(), Ok(Error::PoolNotFound));
 }

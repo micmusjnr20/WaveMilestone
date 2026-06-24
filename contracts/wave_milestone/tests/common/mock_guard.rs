@@ -12,21 +12,14 @@ pub struct MockWaveGuard;
 #[contractimpl]
 impl MockWaveGuard {
     pub fn is_maintainer(env: Env, address: Address) -> bool {
-        env.storage()
-            .instance()
-            .get::<_, bool>(&MockGuardKey::Maintainer(address))
-            .unwrap_or(false)
+        env.storage().instance().get::<_, bool>(&MockGuardKey::Maintainer(address)).unwrap_or(false)
     }
 
     pub fn add_maintainer(env: Env, address: Address) {
-        env.storage()
-            .instance()
-            .set(&MockGuardKey::Maintainer(address), &true);
+        env.storage().instance().set(&MockGuardKey::Maintainer(address), &true);
     }
 
     pub fn remove_maintainer(env: Env, address: Address) {
-        env.storage()
-            .instance()
-            .set(&MockGuardKey::Maintainer(address), &false);
+        env.storage().instance().set(&MockGuardKey::Maintainer(address), &false);
     }
 }

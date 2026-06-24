@@ -1,4 +1,4 @@
-use soroban_sdk::{contractclient, contracttype, Address, BytesN, Env};
+use soroban_sdk::{contractclient, contracterror, contracttype, Address, BytesN, Env};
 
 // ─────────────────────────────────────────────────────────────
 // Data Structures
@@ -15,6 +15,14 @@ pub struct MilestonePool {
     pub allocated_funds: u128,
     pub expiry: u64,
     pub maintainer: Address,
+}
+
+impl MilestonePool {
+    /// Returns the unallocated amount remaining in the pool.
+    #[must_use]
+    pub fn remaining_balance(&self) -> u128 {
+        self.total_funds - self.allocated_funds
+    }
 }
 
 /// Individual issue bounty claim record.
@@ -45,19 +53,20 @@ pub enum DataKey {
 // Error Enum
 // ─────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[contracttype]
+#[contracterror]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u32)]
 pub enum Error {
-    PoolNotFound,
-    PoolNotExpired,
-    BountyAlreadyClaimed,
-    InsufficientPoolBalance,
-    UnauthorizedMaintainer,
-    UnauthorizedCaller,
-    NoFundsToClawback,
-    TransferFailed,
-    InvalidAmount,
-    ExpiryInPast,
+    PoolNotFound = 1,
+    PoolNotExpired = 2,
+    BountyAlreadyClaimed = 3,
+    InsufficientPoolBalance = 4,
+    UnauthorizedMaintainer = 5,
+    UnauthorizedCaller = 6,
+    NoFundsToClawback = 7,
+    TransferFailed = 8,
+    InvalidAmount = 9,
+    ExpiryInPast = 10,
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -8,13 +8,8 @@ use common::*;
 fn test_full_lifecycle_happy_path() {
     let ctx = TestContext::new();
     let pool_size = 100_000_000_000u128;
-    let issues: Vec<(u32, u128)> = vec![
-        (1, 10_000_000_000),
-        (2, 20_000_000_000),
-        (3, 15_000_000_000),
-        (4, 25_000_000_000),
-        (5, 5_000_000_000),
-    ];
+    let issues: Vec<(u32, u128)> =
+        vec![(1, 10_000_000_000), (2, 20_000_000_000), (3, 15_000_000_000), (4, 25_000_000_000), (5, 5_000_000_000)];
     let total_bounties: u128 = issues.iter().map(|(_, a)| a).sum();
     let expected_remaining = pool_size - total_bounties;
 
@@ -30,21 +25,12 @@ fn test_full_lifecycle_happy_path() {
 
     // === Phase 2: Release Bounties ===
     for (issue_id, amount) in &issues {
-        ctx.client().release_issue_bounty(
-            &ctx.maintainer,
-            &ctx.repo_hash,
-            issue_id,
-            &ctx.developer,
-            amount,
-        );
+        ctx.client().release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, issue_id, &ctx.developer, amount);
         assert!(ctx.client().is_claimed(&ctx.repo_hash, issue_id));
     }
 
     assert_eq!(ctx.client().milestone_balance(), expected_remaining);
-    assert_eq!(
-        ctx.token_client().balance(&ctx.developer),
-        total_bounties
-    );
+    assert_eq!(ctx.token_client().balance(&ctx.developer), total_bounties);
 
     // === Phase 3: Duplicate claims rejected ===
     for (issue_id, _) in &issues {
@@ -95,21 +81,13 @@ fn test_full_lifecycle_all_claimed() {
 
     ctx.fund_pool(pool_size);
 
-    ctx.client().release_issue_bounty(
-        &ctx.maintainer,
-        &ctx.repo_hash,
-        &1u32,
-        &ctx.developer,
-        &pool_size,
-    );
+    ctx.client().release_issue_bounty(&ctx.maintainer, &ctx.repo_hash, &1u32, &ctx.developer, &pool_size);
 
     assert_eq!(ctx.client().milestone_balance(), 0);
     assert_eq!(ctx.token_client().balance(&ctx.developer), pool_size);
 
     ctx.advance_to_expiry();
 
-    let result = ctx
-        .client()
-        .try_clawback_expired_funds(&ctx.maintainer);
+    let result = ctx.client().try_clawback_expired_funds(&ctx.maintainer);
     assert!(result.is_err());
 }

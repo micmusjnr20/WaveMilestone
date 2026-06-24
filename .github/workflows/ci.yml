@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32v1-none
           components: rustfmt, clippy
 
       - name: Cache dependencies
@@ -46,7 +46,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32v1-none
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -61,7 +61,7 @@ jobs:
         run: cargo test --workspace --test '*' -- --nocapture
 
   build:
-    name: Build
+    name: Soroban Contract Build
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -70,7 +70,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32v1-none
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -78,19 +78,25 @@ jobs:
           workspaces: |
             contracts/wave_milestone
 
-      - name: Build release WASM
-        run: cargo build --release --target wasm32-unknown-unknown --package wave-milestone
+      - name: Install Stellar CLI
+        uses: stellar/stellar-cli@v22.8.2
+
+      - name: Build Soroban contract WASM
+        run: stellar contract build --manifest-path Cargo.toml --package wave-milestone
+
+      - name: Verify Soroban build artifact
+        run: test -f target/wasm32v1-none/release/wave_milestone.wasm
 
       - name: Optimize WASM (wasm-opt)
         uses: NiklasEi/wasm-opt-action@v2
         with:
-          file: target/wasm32-unknown-unknown/release/wave_milestone.wasm
+          file: target/wasm32v1-none/release/wave_milestone.wasm
 
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:
           name: wave-milestone-wasm
-          path: target/wasm32-unknown-unknown/release/wave_milestone.wasm
+          path: target/wasm32v1-none/release/wave_milestone.wasm
           retention-days: 7
 
   security-audit:
