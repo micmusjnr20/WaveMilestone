@@ -104,6 +104,77 @@ WaveMilestone is a smart contract that holds real assets in escrow. The primary 
 - Even if an attacker front-runs the transaction, they would be sending funds to the same `developer` address (not to themselves).
 - The attacker gains nothing by front-running.
 
+## Trust Assumptions
+
+Understanding what the WaveMilestone contract trusts is critical for a correct security assessment.
+
+### WaveGuard Contract (`guard_contract`)
+
+The WaveGuard registry is the **sole on-chain authority** for maintainer identity. Every privileged write — pool creation and bounty release — defers to `is_maintainer()` on the contract address stored in `pool.guard_contract`.
+
+**Implications**:
+- The `guard_contract` address is fixed at `create_milestone_pool` time and **cannot be rotated** afterward. If the WaveGuard instance is compromised, upgraded maliciously, or its `is_maintainer` logic altered, an attacker can gain maintainer status and drain the pool.
+- Deployers must ensure WaveGuard is not upgradeable by any party that is not fully trusted, or that any upgrade mechanism requires multi-party approval.
+- WaveGuard is **not** consulted during `clawback_expired_funds`. That function performs a direct address equality check (`maintainer == pool.maintainer`) to deliberately isolate the clawback path from a potential WaveGuard compromise.
+
+### Maintainer Address (`maintainer` / `pool.maintainer`)
+
+The `release_issue_bounty` function accepts an arbitrary `developer` address supplied by the maintainer caller. There is **no on-chain restriction** preventing a maintainer from directing a bounty to an address they control.
+
+**Implications**:
+- A malicious or compromised maintainer key can redirect any bounty to any address.
+- This is an accepted design trade-off: the protocol is permissioned and maintainers are vetted by WaveGuard. Off-chain governance (key management, multi-sig, WaveGuard revocation) is the intended mitigation.
+- The expected behavior is documented and tested in `tests/claim_manipulation.rs` (`test_maintainer_can_redirect_developer_address`).
+
+**Mitigations available to deployers**:
+- Use a multi-sig wallet for the maintainer key on mainnet.
+- Enforce off-chain review/approval before calling `release_issue_bounty`.
+- Monitor emitted `BountyReleased` events for unexpected recipient addresses.
+
+### Token Contract (`pool.asset`)
+
+The contract calls an external SAC-style token during fund intake (`create_milestone_pool`), payout (`release_issue_bounty`), and clawback (`clawback_expired_funds`). The token at `pool.asset` is fully trusted to:
+- Execute transfers atomically.
+- Report accurate balances.
+- Not re-enter this contract during transfer calls.
+- Not silently absorb or lose funds.
+
+**Implication**: Deployment must use only verified [Stellar Asset Contracts (SAC)](https://developers.stellar.org/docs/tokens/stellar-asset-contract). A malicious or buggy token contract can bypass all other mitigations in this contract.
+
+## Temporary Storage Leakage
+
+### Overview
+
+Stellar's Soroban SDK provides three storage scopes:
+
+| Scope          | Lifetime                          | Use in this contract                 |
+|----------------|-----------------------------------|--------------------------------------|
+| `instance()`   | Contract instance lifetime        | `MilestonePool` (pool state)         |
+| `persistent()` | Indefinite (must be maintained)   | `IssueClaim` (claim records)         |
+| `temporary()`  | Expires after configurable TTL    | **Not used for auth-critical state** |
+
+### CM-01: Temporary Storage Claim Expiry (Fixed)
+
+A prior version of the contract stored `IssueClaim` records in **Temporary** storage. Temporary storage entries are pruned by the Stellar network after their TTL lapses. Once pruned, `env.storage().temporary().get(key)` returns `None`.
+
+**Attack vector**: A maintainer releases a bounty for issue `(repo_hash, 42)`. The claim record enters Temporary storage. After the TTL expires (and the entry is pruned), the same maintainer calls `release_issue_bounty` again for the same pair. The guard sees `None`, treats the issue as unclaimed, and releases a second payout — effectively a double-spend.
+
+**Fix**: `IssueClaim` records are now stored in `env.storage().persistent()`. Persistent entries survive for the lifetime of the contract and are not subject to automatic TTL pruning.
+
+**Verification**: See `release_issue_bounty` and `is_claimed` in `contracts/wave_milestone/src/lib.rs`. The `DataKey::IssueClaim` enum variant in `types.rs` includes an explicit `SECURITY` comment requiring `persistent()` access for this key.
+
+### TMP-01: General Rule for Future Development
+
+Any future use of Temporary storage for **authorization state** — one-time nonces, session tokens, permission flags, cooldown markers — is subject to the same expiry-based re-use attack if the TTL is not explicitly managed and checked in application logic.
+
+**Rule**: Authorization-critical state MUST use `instance()` or `persistent()` storage. Temporary storage is appropriate only for **non-security-critical** ephemeral data (e.g., read caches or scratch space) where re-computation after expiry carries no security implication.
+
+### TMP-02: Off-Chain Indexer Compatibility Note
+
+Off-chain indexers or tooling that called `is_claimed()` before the CM-01 fix may see different results on live networks after the fix is deployed:
+- Claims recorded in Temporary storage (before the fix) will not be visible via the `is_claimed()` view (which now reads Persistent storage).
+- Indexers should treat the contract deployment block as the canonical starting point for Persistent-storage claim records.
+
 ## Audit Checklist
 
 Items to verify during security review:
