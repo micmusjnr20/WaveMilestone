@@ -38,6 +38,25 @@ fn test_create_pool_rejects_zero_amount() {
     assert_eq!(result.err().unwrap(), Ok(Error::InvalidAmount));
 }
 
+/// Regression test: zero-fund pool creation must be a no-op.
+///
+/// Verifies that a rejected zero-amount call leaves no side effects:
+/// - no pool is persisted in contract storage
+/// - no tokens are transferred out of the maintainer's account
+#[test]
+fn test_create_pool_zero_funds_leaves_no_state() {
+    let ctx = TestContext::new();
+    let initial_balance = DEFAULT_POOL_FUNDS;
+    ctx.token_client().mint(&ctx.maintainer, &initial_balance);
+
+    let _ = ctx.client().try_create_milestone_pool(&ctx.maintainer, &ctx.guard_id, &ctx.token_id, &0u128, &ctx.expiry);
+
+    // No pool should be stored.
+    assert!(ctx.client().milestone_info().is_none());
+    // No tokens should have moved.
+    assert_eq!(ctx.token_client().balance(&ctx.maintainer), initial_balance);
+}
+
 #[test]
 fn test_create_pool_rejects_unauthorized() {
     let ctx = TestContext::new();
