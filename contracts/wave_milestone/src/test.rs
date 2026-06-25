@@ -679,3 +679,28 @@ fn test_recreate_pool_overwrites_existing_accounting() {
     let remaining = WaveMilestoneContractClient::new(&t.env, &t.contract_id).milestone_balance();
     assert_eq!(remaining, second_size);
 }
+
+/// Issue #109: Zero-like developer addresses must be rejected before any state
+/// change or token transfer occurs.  An all-zero contract address is the
+/// canonical zero-like sentinel in Soroban.
+#[test]
+fn test_zero_developer_address_rejected() {
+    let t = setup();
+    fund_pool(&t, 10_000_000_000);
+
+    // CAAAA...D2KM is the Strkey encoding of the 32-byte all-zero contract id.
+    let zero_addr = soroban_sdk::Address::from_str(&t.env, "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM");
+
+    let result = WaveMilestoneContractClient::new(&t.env, &t.contract_id).try_release_issue_bounty(
+        &t.maintainer,
+        &t.repo_hash,
+        &99u32,
+        &zero_addr,
+        &1_000_000_000,
+    );
+
+    assert_eq!(result.err().unwrap(), Ok(Error::InvalidDeveloper));
+
+    // Pool must be untouched.
+    assert_eq!(WaveMilestoneContractClient::new(&t.env, &t.contract_id).milestone_balance(), 10_000_000_000);
+}
