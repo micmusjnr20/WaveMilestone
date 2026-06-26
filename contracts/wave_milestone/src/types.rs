@@ -97,12 +97,13 @@ pub enum Error {
     ClawbackTooEarly = 2,
     BountyAlreadyClaimed = 3,
     InsufficientPoolBalance = 4,
-    UnauthorizedMaintainer = 5,
-    UnauthorizedCaller = 6,
-    NoFundsToClawback = 7,
-    TransferFailed = 8,
-    InvalidAmount = 9,
-    ExpiryInPast = 10,
+    InvalidGuard = 5,
+    UnauthorizedMaintainer = 6,
+    UnauthorizedCaller = 7,
+    NoFundsToClawback = 8,
+    TransferFailed = 9,
+    InvalidAmount = 10,
+    ExpiryInPast = 11,
 }
 
 // ─────────────────────────────────────────────────────────────
