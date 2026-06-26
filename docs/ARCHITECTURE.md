@@ -20,7 +20,7 @@ WaveMilestone is a Stellar Soroban smart contract that implements an automated m
 │  ┌──────────────────────────────────────────────────────┐│
 │  │              WaveMilestone Contract                   ││
 │  │  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ ││
-│  │  │   Instance    │  │   Temporary  │  │   Events   │ ││
+│  │  │   Instance    │  │  Persistent  │  │   Events   │ ││
 │  │  │   Storage     │  │   Storage    │  │   Emitter  │ ││
 │  │  │  (Pool Meta)  │  │ (IssueClaim) │  │            │ ││
 │  │  └──────────────┘  └──────────────┘  └────────────┘ ││
@@ -81,7 +81,7 @@ DataKey::Pool -> MilestonePool {
 - **Bumped on every write** (create_pool, release_bounty, clawback).
 - Stores aggregate pool state; read-heavy access for view methods.
 
-### Temporary Storage (Single-Use, Gas-Optimized)
+### Persistent Storage (Indefinite, Security-Critical)
 
 ```rust
 DataKey::IssueClaim(BytesN<32>, u32) -> IssueClaim {
@@ -89,22 +89,31 @@ DataKey::IssueClaim(BytesN<32>, u32) -> IssueClaim {
     developer: Address,
     payment_amount: u128,
     completed: bool,
+    maintainer: Address,
+    claimed_at: u64,
 }
 ```
 
-- **TTL-based lifecycle**: entries live only as long as needed for replay protection.
-- **Gas savings**: temporary storage costs significantly less than instance storage for short-lived data.
-- Each `(repo_hash, issue_id)` pair is written exactly once (when claimed) and never updated.
+- **Security fix (CM-01)**: Originally stored in Temporary storage, which allowed
+  replay attacks after TTL expiry. Migrated to Persistent storage so that
+  duplicate-claim guards are durable for the contract's lifetime.
+- **Indefinite lifetime**: Entries survive for the contract's lifetime, not subject
+  to automatic TTL pruning.
+- **Write-once**: Each `(repo_hash, issue_id)` pair is written exactly once (when
+  claimed) and never updated.
+- **Audit trail**: Each record captures the `maintainer` who authorized the payout
+  and the `claimed_at` ledger timestamp for off-chain auditing.
 
-### Why This Split?
+### Storage Tier Comparison
 
-| Criteria | Instance | Temporary |
-|----------|----------|-----------|
-| Lifetime | Contract lifetime | ~1 month (claim window) |
+| Criteria | Instance | Persistent |
+|----------|----------|------------|
+| Lifetime | Contract lifetime | Contract lifetime |
 | Read frequency | High (view methods) | Low (only on claim) |
 | Update frequency | Medium (per claim) | Never (write-once) |
 | Cost | Higher per byte | Lower per byte |
 | Data criticality | Pool integrity | Replay protection |
+| Security concern | N/A | Must not use Temporary (CM-01) |
 
 ## Authentication & Authorization
 
