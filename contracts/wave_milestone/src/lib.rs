@@ -109,6 +109,9 @@ impl WaveMilestoneContract {
         maintainer.require_auth();
 
         // ── WaveGuard validation ──
+        if guard_contract == env.current_contract_address() {
+            return Err(Error::InvalidGuard);
+        }
         let guard = WaveGuardClient::new(&env, &guard_contract);
         if !guard.is_maintainer(&maintainer) {
             return Err(Error::UnauthorizedMaintainer);
@@ -270,8 +273,8 @@ impl WaveMilestoneContract {
         }
 
         let now = env.ledger().timestamp();
-        if now < pool.expiry {
-            return Err(Error::PoolNotExpired);
+        if now <= pool.expiry {
+            return Err(Error::ClawbackTooEarly);
         }
 
         let remaining = pool.remaining_balance();
